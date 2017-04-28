@@ -30,7 +30,9 @@ void print_sectormaptbl();
 void print_garbage_all(); // 호출하면 garbage table 리턴
 
 int read(int ppn, char *pagebuf); //file에서 read
-int write(int ppn, char *pagebuf); //file에 write. lpn값도 쓸듯.
+//int write(int ppn, char *pagebuf); //file에 write. lpn값도 쓸듯.
+int write(int ppn, char *pagebuf, char *lsn); //file에 write. lpn값도 쓸듯.
+
 int erase(int pbn); // erase는 한방에 싸그리.
 
 
