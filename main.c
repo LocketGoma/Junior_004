@@ -103,7 +103,7 @@ void data_write() {
 	ftl_write(lsn, temp);
 }
 void data_read() {
-	char temp[SECTOR_SIZE];
+	char temp[PAGE_SIZE];
 	int lsn;
 	printf("읽을 주소를 입력하세요\n");
 	scanf("%d", &lsn);

@@ -29,8 +29,11 @@ void print_block(int pbn);
 void print_sectormaptbl();
 void print_garbage_all(); // 호출하면 garbage table 리턴
 
+
 int read(int ppn, char *pagebuf); //file에서 read
-int write(int ppn, char *pagebuf); //file에 write. lpn값도 쓸듯.
+//int write(int ppn, char *pagebuf); //file에 write. lpn값도 쓸듯.
+//int write(int ppn, char *pagebuf, char *lsn); //file에 write. lpn값도 쓸듯.
+
 int erase(int pbn); // erase는 한방에 싸그리.
 
 
@@ -38,12 +41,13 @@ int erase(int pbn); // erase는 한방에 싸그리.
 // flash memory의 spare area를 다루기 위한 구조체
 //
 typedef struct
-{
-	int lpn;			// page에 데이터를 저장할 때 spare area에 lpn도 같이 저장함
-	int is_invalid;			// page가 유효한지 그렇지 않은지 판별할 때 사용
+{							// ??????
+	int lpn;				// page에 데이터를 저장할 때 spare area에 lpn도 같이 저장함
+	int is_invalid;			// page가 유효한지 그렇지 않은지 판별할 때 사용		0 : 에러 / 1 : 정상
 	char dummy[SPARE_SIZE - 8];
 
 } SpareData;
+int write(int ppn, char *pagebuf, SpareData s_data);
 
 //
 // FTL이 관리하는 address mapping table의 각 entry 구조체로서, 각 entry는 (lpn, ppn) 쌍으로 이루어지지만,

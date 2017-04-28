@@ -1,4 +1,6 @@
 //#define PRINT_FOR_DEBUG
+//"12345\0(쓰레기)123\0", 뒤는 &abc[주소] 로 접근하면 됨.
+
 #define _CRT_SECURE_NO_WARNINGS // 지우셈
 
 #include <stdio.h>
@@ -22,7 +24,7 @@ void print_sectormaptbl();
 
 /******* Mapping Table *******/
 int get_table_area(int lsn); // pbn 리턴, 비어있으면 -1
-int first_empty(int freeblock_pbn); // 비어있는 page 리턴. 고쳐야됨.
+int first_empty(); // 비어있는 page 리턴. 고쳐야됨.
 int find_empty_block();
 
 
@@ -53,8 +55,8 @@ void ftl_open()
 	{
 		sectormaptbl.entry[i].ppn = -1; // 쓸수 있는건 DATABLKS_PER_DEVICE
 		garbagetable.list[i].on_garbage = 0;
-		if (i % 4 == 0)
-			erase(i / 4);
+		//if (i % 4 == 0)
+		//	erase(i / 4);
 	}
 	//free_ppn = DATAPAGES_PER_DEVICE - 1; // 일단 맨 뒤의 것으로 초기화. <- 1차 G-C용.
 
@@ -74,35 +76,50 @@ void ftl_write(int lsn, char *sectorbuf)
 	int ppn = -1;
 	int gppn = -1; // garbage 될 것.
 	char spare[SPARE_SIZE];
+	char *blank;
 	char temp[SECTOR_SIZE];
+
+	SpareData s_data;
+
+
+	// sparedata 구조체를 써야됨.
+	// 방법 : 위치 직접 이동? (포인터 위치를 직접 지정해주고 그 뒤에 붙이기) 
 
 #ifdef PRINT_FOR_DEBUG			// 필요 시 현재의 block mapping table을 출력해 볼 수 있음
 	print_sectormaptbl_info();
 #endif
-	/*
+	
 	if (sectormaptbl.entry[lsn].ppn != -1) // '뭔가 값이 있었다면'
 	{
-		gppn = ppn;
+		gppn = sectormaptbl.entry[lsn].ppn;
 		garbagetable.list[gppn].on_garbage = 1; // garbage 처리.
 	}
 	else
 		;
-	*/
 
-	ppn = get_empty_page();
+	ppn = get_empty_page();					//여기서 -1을 리턴했다고? <- 야 시발 너 블록매핑...
 	printf("retrun ppn : %d\n", ppn);
-	assert(ppn > -1); // -1이면 중단.
-	
+	assert(ppn > -1); // -1이면 중단.		
+	/****구 데이터****/
+	_itoa(lsn, spare, 16);				//현재 시작값 0 오류 이슈 있음.
+	/****************/
+	s_data.lpn = lsn;
+	s_data.is_invalid = 1;
 
-	_itoa(lsn, spare, 16);
+//	printf("%d\n", strlen(blank));
 
-	strcat(sectorbuf,spare);
+//	printf("\n%d\n%s", strlen(sectorbuf),sectorbuf);
+
 
 	sectormaptbl.entry[lsn].ppn = ppn;				// 얘는 정상.
 
-	printf("[[lsn : %d, ppn : %d]]\n", lsn, sectormaptbl.entry[lsn].ppn);
-	write(ppn, sectorbuf);		// 얘 '섹터' 버퍼잖아?. 값 바꾼다.
+//	printf("[[lsn : %d, ppn : %d]]\n", lsn, sectormaptbl.entry[lsn].ppn);
+//	write(ppn, temp);		// 얘 '섹터' 버퍼잖아?. 값 바꾼다.
+//	write(ppn, sectorbuf);		// 원본
+//write(ppn, sectorbuf, spare);
+	write(ppn, sectorbuf, s_data);
 
+//	write(ppn, test_sector);
 
 	return;
 }
@@ -124,6 +141,7 @@ void ftl_read(int lsn, char *sectorbuf)
 
 	read(ppn, sectorbuf);
 
+
 	return;
 }
 
@@ -143,12 +161,12 @@ int get_empty_page()
 	//
 
 	//make_empty_page() 쓸 조건 = block 단위로 검사 시 모두 비어있는 block이 단 한개도 없을시.
-	pbn = find_empty_block();
-	if (pbn == -1)
+//	pbn = find_empty_block();			//블록매핑아니야 병신아....
+//	if (pbn == -1)
 		//make_empty_page(1,get_free()); // gpbn, fpbn 조건 만들기 + 찾기 // fpbn은 완료.
-		make_empty_page(1, DATABLKS_PER_DEVICE);
-	else
-		ppn=first_empty(pbn);
+//		make_empty_page(1, DATABLKS_PER_DEVICE);
+//	else
+		ppn=first_empty();
 
 	return ppn;	
 }
@@ -211,7 +229,7 @@ int make_empty_page(int garbage_pbn, int freeblock_pbn) // 만들다보니 가비지컬렉
 	for (int i = 0; i < PAGES_PER_BLOCK; i++) {								
 		read(freeblock_pbn*PAGES_PER_BLOCK + i, temp);			//그리고 읽은 뒤
 		if (temp != 0xFF)										//초기값이 아니면 (=데이터가 있으면)
-			write(garbage_pbn*PAGES_PER_BLOCK + i, temp);		//쓰기.
+//			write(garbage_pbn*PAGES_PER_BLOCK + i, temp);		//쓰기.
 
 		memset(temp, 0xFF, BLOCK_SIZE);
 	}
@@ -224,17 +242,18 @@ int make_empty_page(int garbage_pbn, int freeblock_pbn) // 만들다보니 가비지컬렉
 	if (is_empty) return first_empty(freeblock_pbn);	// 2차 free block 교환시 사용
 	else return -1;
 }
-int first_empty(int freeblock_pbn) { // 위 함수 보조.					// 고쳐야됨!
+int first_empty() { // 위 함수 보조.	//왜 시작값이 0일까요,
 	char temp[PAGE_SIZE];
-
-	for (int i = 0; i < PAGES_PER_BLOCK; i++) {
-		read(freeblock_pbn*PAGES_PER_BLOCK + i, temp);
-		printf("temp_spare:%s", temp);
-		//if (temp == ) {
-			return freeblock_pbn*PAGES_PER_BLOCK + i;
+	int lsn;
+	for (int i = 0; i < DATABLKS_PER_DEVICE; i++) {
+		for (int j = 0; j < PAGES_PER_BLOCK; j++) {
+			read(PAGES_PER_BLOCK*i + j, temp);
+			if (temp[512] == -1) {
+				return PAGES_PER_BLOCK*i + j;
+			}
 		}
-	//}
-	//return -1;
+	}
+	return -1;
 }
 
 
