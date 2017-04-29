@@ -29,6 +29,7 @@ void print_block(int pbn);
 void print_sectormaptbl();
 void print_garbage_all(); // 호출하면 garbage table 리턴
 
+void test_garbage();
 
 int read(int ppn, char *pagebuf); //file에서 read
 //int write(int ppn, char *pagebuf); //file에 write. lpn값도 쓸듯.

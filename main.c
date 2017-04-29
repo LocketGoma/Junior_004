@@ -17,6 +17,7 @@ void data_read();
 void read_table();
 void read_garbage();
 void controller();
+void garbage_test();
 
 int main(int argc, char *argv[])
 {
@@ -78,13 +79,14 @@ void controller() {
 	while (1) {
 		printf("------------------------------\n");
 		printf("메뉴를 눌러주세요 \n");
-		printf("1:데이터쓰기 / 2:데이터읽기 / 3:데이터테이블확인 / 4:가비지테이블확인 / 0:종료\n");
+		printf("1:데이터쓰기 / 2:데이터읽기 / 3:데이터테이블확인 / 4:가비지테이블확인 / 5 : 가비지컬렉팅(강제) / 0:종료\n");
 		scanf("%d", &lever);
 		switch (lever) {
 		case 1:	data_write();	break;
 		case 2:	data_read();	break;
 		case 3: read_table();	break;
 		case 4: read_garbage();	break;
+		case 5: garbage_test(); break;
 		case 0:	return 0;		break;
 		default:				break;
 		}
@@ -115,4 +117,7 @@ void read_table() {
 }
 void read_garbage() {
 	print_garbage_all();
+}
+void garbage_test() {
+	test_garbage();
 }
