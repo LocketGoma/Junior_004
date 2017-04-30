@@ -25,7 +25,7 @@ void print_sectormaptbl();
 /******* Mapping Table *******/
 int get_table_area(int lsn); // pbn 리턴, 비어있으면 -1
 int first_empty(); // 비어있는 page 리턴. 고쳐야됨.
-int find_empty_block();
+
 
 
 /******* Garbage Table *******/
@@ -38,9 +38,9 @@ int find_worst(); // 최악 찾기
 
 /*************1차 G-C용 함수*************/
 //2차에서는 free_ppn = DATABLKS_PER_DEVICE;
-//int free_ppn; // free ppn, 전역변수이나 함수로만 in/out 할것. 사유 : 데이터 보호 + 변환시 용이. * 직접 호출하지 말것 *
-//void set_free(int ppn); // free_ppn 갱신
-//int get_free(); // free_ppn 리턴
+int free_pbn; // free ppn, 전역변수이나 함수로만 in/out 할것. 사유 : 데이터 보호 + 변환시 용이. * 직접 호출하지 말것 *
+void set_free(int pbn); // free_pbn 갱신
+int get_free(); // free_ppn 리턴
 
 
 //
@@ -64,6 +64,7 @@ void ftl_open()
 	//
 	// 추가적으로 필요한 작업이 있으면 수행할 것
 	//
+	free_pbn = DATABLKS_PER_DEVICE;	//Free block 초기값 : 맨 뒤.
 
 	return;
 }
@@ -107,20 +108,12 @@ void ftl_write(int lsn, char *sectorbuf)
 	s_data.lpn = lsn;
 	s_data.is_invalid = 1;
 
-//	printf("%d\n", strlen(blank));
-
-//	printf("\n%d\n%s", strlen(sectorbuf),sectorbuf);
 
 
 	sectormaptbl.entry[lsn].ppn = ppn;				// 얘는 정상.
 
-//	printf("[[lsn : %d, ppn : %d]]\n", lsn, sectormaptbl.entry[lsn].ppn);
-//	write(ppn, temp);		// 얘 '섹터' 버퍼잖아?. 값 바꾼다.
-//	write(ppn, sectorbuf);		// 원본
-//write(ppn, sectorbuf, spare);
 	write(ppn, sectorbuf, s_data);
 
-//	write(ppn, test_sector);
 
 	return;
 }
@@ -164,26 +157,14 @@ int get_empty_page()
 	//make_empty_page() 쓸 조건 = block 단위로 검사 시 모두 비어있는 block이 단 한개도 없을시.
 	ppn=first_empty();
 	if (ppn == -1) {
-		ppn = make_empty_page(find_worst(), DATABLKS_PER_DEVICE); // 지금은 freeblock 위치가 고정인데, 유동으로 바꾸게 되면 freeblock 위치를 리턴하는 함수도 생겨야 됨.
+		//ppn = make_empty_page(find_worst(), DATABLKS_PER_DEVICE); // 지금은 freeblock 위치가 고정인데, 유동으로 바꾸게 되면 freeblock 위치를 리턴하는 함수도 생겨야 됨.
+		ppn = make_empty_page(find_worst(), get_free());
 	}
 
 	return ppn;	
 }
 
-int find_empty_block() { // empty 'block' 을 찾아주는 함수. 가장 빠른걸 찾는순간 바로 리턴함.		/ 이것도 비정상작동중.
-	int is_empty = 0;
-	for (int i = 0; i < DATABLKS_PER_DEVICE; i++) {
-		for (int j = 0; j < PAGES_PER_BLOCK; j++) {
-			if (i*PAGES_PER_BLOCK + j == -1)	// 내용물이 들어있는게 나올시
-				j = PAGES_PER_BLOCK;
-			else if (j == PAGES_PER_BLOCK - 1)	// continue에 한번도 안걸리고 마지막에 도달시
-				is_empty = 1;					// 해당 블럭이 비어있음을 확인
-		}
-		if (is_empty)							// 해당 블럭이 비어있으면
-			return i;							// 블럭 주소 리턴
-	}
-	return -1; // 못찾으면 -1
-}
+
 
 void test_garbage() {
 	make_empty_page(find_worst(), DATABLKS_PER_DEVICE);
@@ -199,6 +180,7 @@ void test_garbage() {
 // 2차 가비지컬렉팅 : 1차 -> 이후, 다시 g-block와 freeblock을 뒤집어서 원래 freeblock 위치를 다시 freeblock으로 돌려줌.
 int make_empty_page(int garbage_pbn, int freeblock_pbn) // 만들다보니 가비지컬렉팅이 됨....
 {
+	printf("\n-------GC진행중------\n");
 	int garb[PAGES_PER_BLOCK]; //Garbage block 체크. 1 = 정상, 0 = garbage
 	
 	char temp[PAGE_SIZE]; // 임시 버퍼
@@ -220,13 +202,14 @@ int make_empty_page(int garbage_pbn, int freeblock_pbn) // 만들다보니 가비지컬렉
 	for (int i = 0; i < PAGES_PER_BLOCK; i++) {					//일단 데이터 이송을 read / write 반복으로 하자.
 		if (garb[i]==1) {
 			read(garbage_pbn*PAGES_PER_BLOCK + i, temp);
-			temp_spa.lpn = temp[SECTOR_SIZE];
+			temp_spa.lpn = temp[SECTOR_SIZE];			
 			temp_spa.is_invalid = temp[SECTOR_SIZE + sizeof(int)];
+			sectormaptbl.entry[temp_spa.lpn].ppn= freeblock_pbn*PAGES_PER_BLOCK + i;
 //			strcpy(temp_sec, temp);
 //			printf("%d -: %d   \n",(garbage_pbn*PAGES_PER_BLOCK + i), temp[512]);
 //			printf("읽은 생존값 : [%s] [%d]\n", temp_sec,&temp[512]);
 //			printf("변환\n lpn:%d, invalid=%d\n", temp_spa.lpn, temp_spa.is_invalid);
-			if(temp[512]!=-1)
+			if(temp[SECTOR_SIZE]!=-1)
 			write(freeblock_pbn*PAGES_PER_BLOCK + i, temp, temp_spa);
 
 			temp[0] = '\0';
@@ -240,24 +223,24 @@ int make_empty_page(int garbage_pbn, int freeblock_pbn) // 만들다보니 가비지컬렉
 	for (int i = 0 ; i < PAGES_PER_BLOCK; i++) {
 		garbagetable.list[garbage_pbn*PAGES_PER_BLOCK+i].on_garbage = 0;	// 가비지 초기화.
 	}
-
+	/********free pbn은 여기서만 갱신이 일어남********/
 	erase(garbage_pbn);
-//	freeblock_pbn = garbage_pbn;						// 1차
-//	set_free(freeblock_pbn);							// 1차
+	freeblock_pbn = garbage_pbn;						// 1차
+	set_free(freeblock_pbn);							// 1차
 
 	/**************2차 G-C 용 코드*******************/
 	 //초기값으로 초기화.
-	for (int i = 0; i < PAGES_PER_BLOCK; i++) {								
-		read(freeblock_pbn*PAGES_PER_BLOCK + i, temp);			//그리고 읽은 뒤
+//	for (int i = 0; i < PAGES_PER_BLOCK; i++) {								
+//		read(freeblock_pbn*PAGES_PER_BLOCK + i, temp);			//그리고 읽은 뒤
 //		strcpy(temp_sec, temp);
-		temp_spa.lpn = temp[SECTOR_SIZE];
-		temp_spa.is_invalid = temp[SECTOR_SIZE + sizeof(int)];
-		if (temp[512] != -1)										
-			write(garbage_pbn*PAGES_PER_BLOCK + i, temp,temp_spa);		//쓰기.
-		temp[0] = '\0';
+//		temp_spa.lpn = temp[SECTOR_SIZE];
+//		temp_spa.is_invalid = temp[SECTOR_SIZE + sizeof(int)];
+//		if (temp[SECTOR_SIZE] != -1)
+//			write(garbage_pbn*PAGES_PER_BLOCK + i, temp,temp_spa);		//쓰기.
+//		temp[0] = '\0';
 //		temp_sec[0] = '\0';
-	}
-	erase(freeblock_pbn);										//freeblock 재 초기화.
+//	}
+//	erase(freeblock_pbn);										//freeblock 재 초기화.
 	
 
 	/**************2차 G-C 용 코드*******************/
@@ -271,11 +254,13 @@ int make_empty_page(int garbage_pbn, int freeblock_pbn) // 만들다보니 가비지컬렉
 int first_empty() { // 위 함수 보조.	//왜 시작값이 0일까요,
 	char temp[PAGE_SIZE];
 	int lsn;
-	for (int i = 0; i < DATABLKS_PER_DEVICE; i++) {
-		for (int j = 0; j < PAGES_PER_BLOCK; j++) {
+	//for (int i = 0; i < DATABLKS_PER_DEVICE; i++) {		//2차 GC
+	for (int i = 0; i < BLOCKS_PER_DEVICE; i++) {			//1차 GC
+		if (i!=get_free())				// 현재 i가 free pbn이 아니면.
+		for (int j = 0; j < PAGES_PER_BLOCK; j++) {			
 			read(PAGES_PER_BLOCK*i + j, temp);
-			printf("[%d]", temp[512]);
-			if (temp[512] == -1) {
+			printf("[%d]", temp[SECTOR_SIZE]);
+			if (temp[SECTOR_SIZE] == -1) {
 				return PAGES_PER_BLOCK*i + j;
 			}
 		}
@@ -287,8 +272,10 @@ int find_worst() { //최악 (가비지가 제일 많은) 블록 리턴. 에러 : -1
 	int count;
 	int target;
 	target = -1;
-	for (int i = 0; i < DATABLKS_PER_DEVICE; i++) { //블록
+//	for (int i = 0; i < DATABLKS_PER_DEVICE; i++) { //블록, 2차 GC
+	for (int i = 0; i < BLOCKS_PER_DEVICE; i++) { //블록, 1차 GC
 		count = 0;
+		if (i != get_free())					//1차 GC
 		for (int j = 0; j < PAGES_PER_BLOCK; j++) {
 			if (garbagetable.list[DATABLKS_PER_DEVICE*i+j].on_garbage == 1)
 				count++;
@@ -368,12 +355,11 @@ void print_garbage(int ppn) {
 		printf("[%d]\n", ppn);
 	}
 }
-/*						//1차 G-C 용 함수
-void set_free(int ppn) // free_ppn 갱신
+					//1차 G-C 용 함수
+void set_free(int pbn) // free_pbn 갱신
 {
-	free_ppn = ppn;
+	free_pbn = pbn;
 }
 int get_free() {
-	return free_ppn;
+	return free_pbn;
 }
-*/

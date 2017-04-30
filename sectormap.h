@@ -14,7 +14,7 @@
 #define	PAGES_PER_BLOCK		4					// 수정 가능
 #define SECTORS_PER_BLOCK	(SECTORS_PER_PAGE*PAGES_PER_BLOCK)
 #define	BLOCK_SIZE		(PAGE_SIZE*PAGES_PER_BLOCK)
-#define	BLOCKS_PER_DEVICE	8					// 수정 가능
+#define	BLOCKS_PER_DEVICE	3					// 수정 가능 - 테스트를 위해 3으로 감소.
 #define	DEVICE_SIZE		(BLOCK_SIZE*BLOCKS_PER_DEVICE)
 #define DATABLKS_PER_DEVICE	(BLOCKS_PER_DEVICE - 1)			// free block로서 예비 블록을 하나 둠
 #define DATAPAGES_PER_DEVICE	(DATABLKS_PER_DEVICE*PAGES_PER_BLOCK)	// 실제 데이터를 저장할 수 있는 전체 페이지의 수
